@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TNT Chat - Premium Experience</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Custom Premium CSS -->
+    <link rel="stylesheet" href="/css/style.css">
+    
+    <!-- CryptoJS untuk enkripsi/dekripsi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <!-- Emoji Picker (module) -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
+    
+    <style>
+        /* Join Screen Styles */
+        #join-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 2000;
+        }
+
+        emoji-picker {
+            position: absolute;
+            bottom: 90px;
+            right: 16px;
+            left: 16px;
+            z-index: 1000;
+            width: auto;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            emoji-picker {
+                right: 40px;
+                left: auto;
+                width: 350px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Chat Screen -->
+    <div id="chat-screen" style="display:none;">
+        <header class="header">
+            <div class="header-info">
+                <h2 id="member-name">Memuat...</h2>
+                <span id="member-id-display" style="font-size:0.7rem; color:var(--text-muted); display:block;"></span>
+            </div>
+            <button onclick="window.clearLocalChat()" class="secondary" style="padding: 8px 12px; font-size: 0.8rem; border-radius: 12px;">🧹 Bersihkan</button>
+        </header>
+
+        <main id="chat-panel">
+            <div id="chat-box"></div>
+            <div class="input-area">
+                <button id="emoji-btn">😊</button>
+                <input type="text" id="message-input" placeholder="Ketik pesan..." autocomplete="off">
+                <button onclick="window.sendMessage()" id="send-btn">🚀</button>
+                <emoji-picker id="picker" style="display: none;"></emoji-picker>
+            </div>
+        </main>
+    </div>
+
+    <!-- Join Screen (For APK/Direct Access) -->
+    <div id="join-screen" style="display:none;">
+        <div class="login-card">
+            <h2>🚀 TNT Chat</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.9rem;">Masukkan namamu untuk mulai chat dengan Admin</p>
+            <input type="text" id="join-name-input" placeholder="Nama kamu..." autocomplete="off" style="width: 100%; padding: 14px; background: var(--surface-dark); border: 1px solid var(--glass-border); border-radius: 12px; color: #fff; margin-bottom: 20px; outline: none;">
+            <button onclick="window.joinChat()" style="width:100%; padding: 14px; background: linear-gradient(135deg, var(--neon-primary), var(--neon-secondary)); border:none; border-radius: 12px; color:#fff; font-weight:800; cursor:pointer;">GABUNG CHAT</button>
+        </div>
+    </div>
+
+    <div id="error-screen" style="display:none;">
+        <div class="container" style="text-align: center; justify-content: center; display: flex; flex-direction: column; height: 100vh;">
+            <h2 style="color: var(--neon-accent); font-size: 2rem; margin-bottom: 20px;">❌ Error</h2>
+            <p id="error-message" style="color: var(--text-secondary); margin-bottom: 30px;"></p>
+            <button onclick="location.reload()" class="secondary" style="align-self: center;">Coba Lagi</button>
+        </div>
+    </div>
+
+    <audio id="notif-sound" src="/assets/notif.mp3" preload="auto"></audio>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, get, update, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCSLVGFpo-1dZ3_fMX_neOKEXHVYrT22nw",
+            authDomain: "tntchat-c8d15.firebaseapp.com",
+            databaseURL: "https://tntchat-c8d15-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tntchat-c8d15",
+            storageBucket: "tntchat-c8d15.firebasestorage.app",
+            messagingSenderId: "62397511792",
+            appId: "1:62397511792:web:9ae54b5ec503caa35b1cb5",
+            measurementId: "G-G1SKL6L3R3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const SECRET_KEY = "!qawsedrftg%^78";
+
+        // Logic for APK/Member ID
+        let memberId = null;
+        const path = window.location.pathname;
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Try getting ID from URL first (for web links)
+        const pathSegments = path.split('/');
+        const cIndex = pathSegments.indexOf('c');
+        if (cIndex !== -1) {
+            memberId = pathSegments[cIndex + 1];
+        } else if (urlParams.get('c')) {
+            memberId = urlParams.get('c');
+        }
+
+        // If no ID in URL, check localStorage (for APK users)
+        const savedId = localStorage.getItem('tnt_member_id');
+
+        const chatScreen = document.getElementById('chat-screen');
+        const joinScreen = document.getElementById('join-screen');
+        const errorScreen = document.getElementById('error-screen');
+        const chatBox = document.getElementById('chat-box');
+        const msgInput = document.getElementById('message-input');
+        const memberNameEl = document.getElementById('member-name');
+        const memberIdDisplay = document.getElementById('member-id-display');
+        const notifSound = document.getElementById('notif-sound');
+        const picker = document.querySelector('#picker');
+        const emojiBtn = document.querySelector('#emoji-btn');
+
+        if (memberId) {
+            initializeMember(memberId);
+        } else if (savedId) {
+            memberId = savedId;
+            initializeMember(memberId);
+        } else {
+            joinScreen.style.display = 'flex';
+        }
+
+        window.joinChat = async () => {
+            const nameInput = document.getElementById('join-name-input');
+            const name = nameInput.value.trim();
+            if (!name) return;
+
+            // Generate clean ID from name
+            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '') + Math.floor(Math.random() * 100);
+            
+            try {
+                await set(ref(db, `tntchat/members/${id}`), {
+                    name,
+                    createdAt: Date.now(),
+                    lastActive: Date.now()
+                });
+                localStorage.setItem('tnt_member_id', id);
+                location.reload();
+            } catch (e) {
+                alert("Gagal daftar: " + e.message);
+            }
+        };
+
+        function showError(reason = '') {
+            chatScreen.style.display = 'none';
+            joinScreen.style.display = 'none';
+            errorScreen.style.display = 'block';
+            document.getElementById('error-message').textContent = reason;
+        }
+
+        async function initializeMember(id) {
+            chatScreen.style.display = 'flex';
+            joinScreen.style.display = 'none';
+            
+            try {
+                const memberRef = ref(db, `tntchat/members/${id}`);
+                const snapshot = await get(memberRef);
+                
+                if (!snapshot.exists()) {
+                    // If ID was in localStorage but doesn't exist in DB, reset
+                    localStorage.removeItem('tnt_member_id');
+                    showError(`ID "${id}" tidak valid atau sudah dihapus.`);
+                    return;
+                }
+                
+                const memberData = snapshot.val();
+                memberNameEl.textContent = `${memberData.name} 👋`;
+                memberIdDisplay.textContent = `@${id}`;
+                
+                update(memberRef, { lastActive: Date.now() });
+                
+                const chatId = `admin_${id}`;
+                onChildAdded(ref(db, `tntchat/chats/${chatId}/messages`), (snapshot) => {
+                    const msg = snapshot.val();
+                    let displayText = msg.text;
+                    if (msg.encrypted) {
+                        try {
+                            const bytes = CryptoJS.AES.decrypt(msg.text, SECRET_KEY);
+                            displayText = bytes.toString(CryptoJS.enc.Utf8);
+                        } catch (e) { displayText = '[Terenkripsi]'; }
+                    }
+                    
+                    const div = document.createElement('div');
+                    div.className = `msg ${msg.sender === 'admin' ? 'admin' : 'anggota'}`;
+                    div.textContent = displayText;
+                    chatBox.appendChild(div);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                    
+                    if (msg.sender === 'admin') {
+                        notifSound.currentTime = 0;
+                        notifSound.play().catch(()=>{});
+                    }
+                });
+            } catch (error) {
+                showError('Database error: ' + error.message);
+            }
+        }
+
+        window.sendMessage = () => {
+            const text = msgInput.value.trim();
+            if (!text) return;
+            const encrypted = CryptoJS.AES.encrypt(text, SECRET_KEY).toString();
+            push(ref(db, `tntchat/chats/admin_${memberId}/messages`), {
+                sender: memberId, text: encrypted, encrypted: true, timestamp: Date.now()
+            });
+            msgInput.value = '';
+            msgInput.focus();
+        };
+
+        // UI Handlers
+        emojiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+        });
+        document.addEventListener('click', (e) => {
+            if (!picker.contains(e.target) && e.target !== emojiBtn) picker.style.display = 'none';
+        });
+        picker.addEventListener('emoji-click', event => {
+            msgInput.value += event.detail.unicode;
+            picker.style.display = 'none';
+            msgInput.focus();
+        });
+        msgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') window.sendMessage(); });
+        window.clearLocalChat = () => { if (confirm('Bersihkan layar?')) chatBox.innerHTML = ''; };
+        document.body.addEventListener('click', function initSound() {
+            notifSound.play().then(() => { notifSound.pause(); notifSound.currentTime = 0; }).catch(()=>{});
+            document.body.removeEventListener('click', initSound);
+        }, { once: true });
+    </script>
+</body>
+</html>

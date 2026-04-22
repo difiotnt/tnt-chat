@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TNT Chat - Anggota</title>
+    
+    <!-- Custom Premium CSS -->
+    <link rel="stylesheet" href="/css/style.css">
+    
+    <!-- CryptoJS untuk enkripsi/dekripsi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <!-- Emoji Picker (module) -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
+    
+    <style>
+        /* Trik membalik posisi chat: "Anda" di kanan, Admin di kiri */
+        .msg.anggota { 
+            align-self: flex-end !important; 
+            border-bottom-left-radius: 20px !important; 
+            border-bottom-right-radius: 4px !important; 
+        }
+        .msg.admin { 
+            align-self: flex-start !important; 
+            border-bottom-right-radius: 20px !important; 
+            border-bottom-left-radius: 4px !important; 
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-screen">
+        <div class="header">
+            <h2 id="member-name">Met datang di Tanto Chat 😁 Cantik</h2>
+            <p id="member-id-display" style="font-size:0.8em; color:#666;"></p>
+        </div>
+        <div id="chat-panel">
+            <div id="chat-box"></div>
+            <div class="input-area">
+                <input type="text" id="message-input" placeholder="Ketik pesan...">
+                <button onclick="window.sendMessage()">Kirim</button>
+                <button id="emoji-btn">😊</button>
+                <emoji-picker id="picker" style="display: none; position: absolute; bottom: 80px; right: 20px; z-index: 1000;"></emoji-picker>
+            </div>
+            <div class="action-bar">
+                <button onclick="window.clearLocalChat()" style="background:#95a5a6;">🧹 Bersihkan Layar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-screen" style="display:none; text-align:center; margin-top:50px;">
+        <h2>❌ Link tidak valid</h2>
+        <p>Silakan hubungi admin untuk mendapatkan link chat yang benar.</p>
+        <p id="debug-info" style="color:#888; margin-top:20px;"></p>
+    </div>
+
+    <audio id="notif-sound" src="/assets/notif.mp3" preload="auto"></audio>
+
+    <!-- SCRIPT MODULE UTAMA (SUDAH DIRAPIKAN) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, get, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCSLVGFpo-1dZ3_fMX_neOKEXHVYrT22nw",
+            authDomain: "tntchat-c8d15.firebaseapp.com",
+            databaseURL: "https://tntchat-c8d15-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tntchat-c8d15",
+            storageBucket: "tntchat-c8d15.firebasestorage.app",
+            messagingSenderId: "62397511792",
+            appId: "1:62397511792:web:9ae54b5ec503caa35b1cb5",
+            measurementId: "G-G1SKL6L3R3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const SECRET_KEY = "!qawsedrftg%^78";
+
+        // === AMBIL ID DARI PATH ATAU QUERY (FALLBACK) ===
+        let memberId = null;
+        const path = window.location.pathname;
+        const pathSegments = path.split('/');
+        const cIndex = pathSegments.indexOf('c');
+        
+        if (cIndex !== -1) {
+            memberId = pathSegments[cIndex + 1];
+        } else {
+            const urlParams = new URLSearchParams(window.location.search);
+            memberId = urlParams.get('c');
+        }
+
+        // Debug info
+        console.log('Pathname:', path);
+        console.log('Member ID:', memberId);
+        document.getElementById('debug-info').textContent = `Path: ${path} | ID: ${memberId || 'tidak ada'}`;
+
+        // === DEKLARASI ELEMEN DOM (CUKUP SATU KALI) ===
+        const chatScreen = document.getElementById('chat-screen');
+        const errorScreen = document.getElementById('error-screen');
+        const chatBox = document.getElementById('chat-box');
+        const msgInput = document.getElementById('message-input');
+        const memberNameEl = document.getElementById('member-name');
+        const memberIdDisplay = document.getElementById('member-id-display');
+        const notifSound = document.getElementById('notif-sound');
+        
+        // Elemen Emoji Picker
+        const picker = document.querySelector('#picker');
+        const emojiBtn = document.querySelector('#emoji-btn');
+
+        // === LOGIKA EMOJI ===
+        emojiBtn.addEventListener('click', () => {
+            picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+        });
+
+        picker.addEventListener('emoji-click', event => {
+            msgInput.value += event.detail.unicode;
+            picker.style.display = 'none';
+            msgInput.focus();
+        });
+
+        let unsubscribeChat = null;
+
+        if (!memberId) {
+            showError('ID anggota tidak ditemukan di URL');
+        } else {
+            initializeMember(memberId);
+        }
+
+        function showError(reason = '') {
+            chatScreen.style.display = 'none';
+            errorScreen.style.display = 'block';
+            if (reason) console.error('Error:', reason);
+        }
+
+        async function initializeMember(id) {
+            if (unsubscribeChat) {
+                unsubscribeChat();
+                unsubscribeChat = null;
+            }
+
+            try {
+                const memberRef = ref(db, `tntchat/members/${id}`);
+                const snapshot = await get(memberRef);
+                
+                if (!snapshot.exists()) {
+                    showError(`Data anggota dengan ID "${id}" tidak ditemukan di database`);
+                    return;
+                }
+                
+                const memberData = snapshot.val();
+                memberNameEl.textContent = `🙋 ${memberData.name}`;
+                memberIdDisplay.textContent = `ID: ${id}`;
+                
+                update(memberRef, { lastActive: Date.now() });
+                
+                const capturedId = id;
+                const chatId = `admin_${capturedId}`;
+                const messagesRef = ref(db, `tntchat/chats/${chatId}/messages`);
+                
+                unsubscribeChat = onChildAdded(messagesRef, (snapshot) => {
+                    const msg = snapshot.val();
+                    let displayText = msg.text;
+                    if (msg.encrypted) {
+                        try {
+                            const bytes = CryptoJS.AES.decrypt(msg.text, SECRET_KEY);
+                            displayText = bytes.toString(CryptoJS.enc.Utf8);
+                            if (!displayText) throw new Error('Gagal dekripsi');
+                        } catch (e) {
+                            displayText = '[Pesan terenkripsi]';
+                        }
+                    }
+                    const div = document.createElement('div');
+                    div.className = `msg ${msg.sender === 'admin' ? 'admin' : 'anggota'}`;
+                    const senderName = msg.sender === 'admin' ? 'Admin' : 'Anda';
+                    div.textContent = `[${senderName}] ${displayText}`;
+                    chatBox.appendChild(div);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                    
+                    if (msg.sender === 'admin') {
+                        notifSound.currentTime = 0;
+                        notifSound.play().catch(e=>{});
+                    }
+                });
+                
+            } catch (error) {
+                showError('Gagal mengakses database: ' + error.message);
+            }
+        }
+
+        window.sendMessage = () => {
+            const text = msgInput.value.trim();
+            if (!text) return;
+            const encrypted = CryptoJS.AES.encrypt(text, SECRET_KEY).toString();
+            push(ref(db, `tntchat/chats/admin_${memberId}/messages`), {
+                sender: memberId,
+                text: encrypted,
+                encrypted: true,
+                timestamp: Date.now()
+            });
+            msgInput.value = '';
+        };
+
+        msgInput.addEventListener('keypress', (e) => { 
+            if (e.key === 'Enter') window.sendMessage(); 
+        });
+
+        window.clearLocalChat = () => {
+            if (confirm('Bersihkan tampilan chat di layar ini?')) {
+                chatBox.innerHTML = '';
+                const sysDiv = document.createElement('div');
+                sysDiv.className = 'system-msg';
+                sysDiv.textContent = '✨ Tampilan chat dibersihkan';
+                chatBox.appendChild(sysDiv);
+            }
+        };
+
+        document.body.addEventListener('click', function initSound() {
+            notifSound.play().then(() => { 
+                notifSound.pause(); 
+                notifSound.currentTime = 0; 
+            }).catch(()=>{});
+            document.body.removeEventListener('click', initSound);
+        }, { once: true });
+    </script>
+</body>
+</html>

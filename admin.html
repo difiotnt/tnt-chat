@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-Studio Admin - Control Panel</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <style>
+        /* Admin specific layout adjustments */
+        #main-screen .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 16px;
+        }
+        
+        @media (min-width: 768px) {
+            #main-screen .container {
+                flex-direction: row;
+                height: calc(100vh - 100px);
+                align-items: stretch;
+            }
+            #member-panel {
+                width: 350px;
+                flex-shrink: 0;
+            }
+            #chat-panel-admin {
+                flex: 1;
+            }
+        }
+
+        #chat-panel-admin {
+            display: flex;
+            flex-direction: column;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        #chat-header-admin {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #chat-box {
+            flex: 1;
+            height: 400px; /* Base height for mobile */
+        }
+
+        @media (min-width: 768px) {
+            #chat-box {
+                height: auto;
+            }
+        }
+        
+        emoji-picker {
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-card">
+            <h2>🔐 T-Studio Admin</h2>
+            <input type="password" id="password-input" placeholder="Masukkan password">
+            <button onclick="window.loginAdmin()">Masuk</button>
+            <p id="login-error" style="color:var(--neon-accent); margin-top:10px; font-size: 0.8rem;"></p>
+        </div>
+    </div>
+
+    <div id="main-screen" style="display:none;">
+        <header class="header">
+            <h2>👑 Panel Kendali</h2>
+            <button class="secondary" onclick="window.logout()" style="padding: 8px 16px; border-radius: 12px;">Keluar</button>
+        </header>
+
+        <div class="container">
+            <div id="member-panel">
+                <h3 style="font-size: 1rem; margin-bottom: 15px; color: var(--neon-primary);">👥 Daftar Anggota</h3>
+                <div class="new-member-form" style="display:flex; gap:8px; margin-bottom: 20px;">
+                    <input type="text" id="new-member-name" placeholder="Nama..." style="flex:1; background: var(--surface-dark); border: 1px solid var(--glass-border); border-radius: 12px; padding: 10px; color: #fff;">
+                    <button onclick="window.createNewMember()" style="padding: 10px 15px; border-radius: 12px; background: var(--neon-primary); border:none; cursor:pointer;">➕</button>
+                </div>
+                <ul id="member-list"></ul>
+            </div>
+
+            <div id="chat-panel-admin">
+                <div id="chat-header-admin">
+                    <h3 id="chat-title" style="font-size: 1rem;">💬 Pilih anggota</h3>
+                    <button id="copy-link-btn" class="secondary" style="display:none; padding: 6px 12px; font-size: 0.8rem; border-radius: 10px;" onclick="window.copyMemberLink()">📋 Salin Link</button>
+                </div>
+                
+                <div id="chat-box"></div>
+                
+                <div class="input-area">
+                    <button id="emoji-btn" class="secondary" disabled>😊</button> 
+                    <input type="text" id="message-input" placeholder="Ketik pesan..." disabled>
+                    <button id="send-btn" onclick="window.sendMessage()" disabled>🚀</button>
+                    <emoji-picker id="picker" style="display: none;"></emoji-picker>
+                </div>
+                
+                <div class="action-bar" style="padding: 10px 20px; border-top: 1px solid var(--glass-border); display: flex; justify-content: flex-end;">
+                    <button id="clear-btn" class="danger" onclick="window.clearCurrentChat()" disabled style="padding: 6px 12px; font-size: 0.8rem; border-radius: 10px;">🧹 Hapus Chat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="notif-sound" src="/assets/notif.mp3" preload="auto"></audio>
+
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, remove, set, get, update, off } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCSLVGFpo-1dZ3_fMX_neOKEXHVYrT22nw",
+            authDomain: "tntchat-c8d15.firebaseapp.com",
+            databaseURL: "https://tntchat-c8d15-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tntchat-c8d15",
+            storageBucket: "tntchat-c8d15.firebasestorage.app",
+            messagingSenderId: "62397511792",
+            appId: "1:62397511792:web:9ae54b5ec503caa35b1cb5",
+            measurementId: "G-G1SKL6L3R3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        const SECRET_KEY = "!qawsedrftg%^78";
+        const ADMIN_PASSWORD = "18273645";
+
+        let currentMemberId = null;       
+        let currentMemberName = "";
+        let currentMessagesRef = null;
+        let unsubscribeChat = null;
+        let chatLoaded = false;
+
+        const chatBox = document.getElementById('chat-box');
+        const msgInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const emojiBtn = document.getElementById('emoji-btn');
+        const picker = document.querySelector('#picker');
+        const chatTitle = document.getElementById('chat-title');
+        const copyLinkBtn = document.getElementById('copy-link-btn');
+        const notifSound = document.getElementById('notif-sound');
+
+        window.loginAdmin = () => {
+            if (document.getElementById('password-input').value === ADMIN_PASSWORD) {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'block';
+                loadMembers();
+            } else {
+                document.getElementById('login-error').textContent = 'Password salah!';
+            }
+        };
+
+        window.logout = () => location.reload();
+
+        emojiBtn.addEventListener('click', () => {
+            picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+        });
+
+        picker.addEventListener('emoji-click', event => {
+            msgInput.value += event.detail.unicode;
+            picker.style.display = 'none';
+            msgInput.focus();
+        });
+
+        async function loadMembers() {
+            try {
+                const snapshot = await get(ref(db, 'tntchat/members'));
+                const listEl = document.getElementById('member-list');
+                listEl.innerHTML = '';
+                if (!snapshot.exists()) return;
+                const members = [];
+                snapshot.forEach(child => { members.push({ id: child.key, ...child.val() }); });
+                members.sort((a,b) => (b.lastActive || 0) - (a.lastActive || 0));
+                members.forEach(m => {
+                    const li = document.createElement('li');
+                    li.className = `member-item ${m.id === currentMemberId ? 'active' : ''}`;
+                    li.id = `mem-${m.id}`;
+                    li.onclick = () => window.selectMember(m.id, m.name);
+                    li.innerHTML = `
+                        <span style="flex-grow:1; pointer-events:none; font-weight: 600;">
+                            ${m.name} ${m.id === currentMemberId ? '✅' : ''}
+                        </span>
+                        <button class="delete-btn" onclick="event.stopPropagation(); window.deleteMember('${m.id}', '${m.name.replace(/'/g, "\\\\'")}')">🗑️</button>
+                    `;
+                    listEl.appendChild(li);
+                });
+            } catch (e) { console.error("Load Error:", e); }
+        }
+
+        window.selectMember = (id, name) => {
+            if (unsubscribeChat) { unsubscribeChat(); unsubscribeChat = null; }
+            if (currentMessagesRef) { off(currentMessagesRef); }
+
+            currentMemberId = id;
+            currentMemberName = name;
+            chatLoaded = false;
+
+            document.querySelectorAll('.member-item').forEach(el => el.classList.remove('active'));
+            const activeEl = document.getElementById(`mem-${id}`);
+            if (activeEl) activeEl.classList.add('active');
+
+            chatTitle.textContent = `💬 Chat: ${name}`;
+            msgInput.disabled = false;
+            emojiBtn.disabled = false;
+            sendBtn.disabled = false;
+            clearBtn.disabled = false;
+            copyLinkBtn.style.display = 'inline-block';
+            chatBox.innerHTML = '<div class="system-msg">⏳ Memuat...</div>';
+
+            currentMessagesRef = ref(db, `tntchat/chats/admin_${id}/messages`);
+            unsubscribeChat = onChildAdded(currentMessagesRef, (snap) => {
+                if (!chatLoaded) { chatBox.innerHTML = ''; chatLoaded = true; }
+                displayMessage(snap.val());
+            });
+            update(ref(db, `tntchat/members/${id}`), { lastActive: Date.now() });
+        };
+
+        function displayMessage(msg) {
+            let text = msg.text;
+            if (msg.encrypted) {
+                try {
+                    const bytes = CryptoJS.AES.decrypt(msg.text, SECRET_KEY);
+                    text = bytes.toString(CryptoJS.enc.Utf8) || '[Gagal Dekripsi]';
+                } catch (e) { text = '[Terenkripsi]'; }
+            }
+            const div = document.createElement('div');
+            div.className = `msg ${msg.sender === 'admin' ? 'anggota' : 'admin'}`; // Admin in admin view is the sender, so use 'anggota' style for right alignment if wanted, or swap
+            // In admin view: 'admin' style is actually the member (left), 'anggota' style is admin (right)
+            div.textContent = text;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            if (msg.sender !== 'admin') { notifSound.currentTime = 0; notifSound.play().catch(()=>{}); }
+        }
+
+        window.sendMessage = () => {
+            const val = msgInput.value.trim();
+            if (!val || !currentMemberId) return;
+            const encrypted = CryptoJS.AES.encrypt(val, SECRET_KEY).toString();
+            push(ref(db, `tntchat/chats/admin_${currentMemberId}/messages`), {
+                sender: 'admin', text: encrypted, encrypted: true, timestamp: Date.now()
+            });
+            msgInput.value = '';
+            msgInput.focus();
+        };
+
+        window.clearCurrentChat = () => {
+            if (!currentMemberId) return;
+            if (!confirm(`Hapus seluruh riwayat chat dengan ${currentMemberName}?`)) return;
+            remove(ref(db, `tntchat/chats/admin_${currentMemberId}/messages`)).then(() => {
+                chatBox.innerHTML = '<div class="system-msg">✨ Chat dibersihkan</div>';
+                chatLoaded = false;
+            }).catch(e => alert("Gagal: " + e.message));
+        };
+
+        window.createNewMember = async () => {
+            const nameEl = document.getElementById('new-member-name');
+            const name = nameEl.value.trim();
+            if (!name) return;
+            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            await set(ref(db, `tntchat/members/${id}`), { name, createdAt: Date.now(), lastActive: Date.now() });
+            nameEl.value = '';
+            await loadMembers();
+            window.selectMember(id, name);
+        };
+
+        window.deleteMember = async (id, name) => {
+            if (!confirm(`Hapus ${name}?`)) return;
+            await remove(ref(db, `tntchat/members/${id}`));
+            await remove(ref(db, `tntchat/chats/admin_${id}`));
+            if (currentMemberId === id) location.reload(); else loadMembers();
+        };
+
+        window.copyMemberLink = () => {
+            const link = `${window.location.origin}/c/${currentMemberId}`;
+            navigator.clipboard.writeText(link).then(() => alert('Disalin!'));
+        };
+
+        msgInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') window.sendMessage(); });
+        document.body.addEventListener('click', () => {
+            notifSound.play().then(() => { notifSound.pause(); notifSound.currentTime = 0; }).catch(()=>{});
+        }, { once: true });
+    </script>
+</body>
+</html>
