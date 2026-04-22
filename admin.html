@@ -106,6 +106,16 @@
                 document.getElementById('login-error').textContent = 'Password salah!';
             }
         }
+
+        // Fallback logout handler (works even if module script fails to load).
+        window.logout = () => {
+            if (!confirm("Keluar dari Admin?")) return;
+            try { window.__adminCleanup?.(); } catch (_) {}
+            document.getElementById('main-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('password-input').value = '';
+            document.getElementById('login-error').textContent = '';
+        };
     </script>
 
     <!-- Image Viewer Modal -->
@@ -201,10 +211,22 @@
             loadMembers();
         });
 
+        window.__adminCleanup = () => {
+            if (unsubscribeChat) { unsubscribeChat(); unsubscribeChat = null; }
+            if (currentMessagesRef) { off(currentMessagesRef); currentMessagesRef = null; }
+            currentMemberId = null;
+            currentMemberName = "";
+            chatLoaded = false;
+        };
+
+        // Logout tanpa reload, balik ke layar login.
         window.logout = () => {
-            if(confirm("Keluar dari Admin?")) {
-                location.reload();
-            }
+            if (!confirm("Keluar dari Admin?")) return;
+            window.__adminCleanup();
+            document.getElementById('main-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('password-input').value = '';
+            document.getElementById('login-error').textContent = '';
         };
 
         emojiBtn.addEventListener('click', () => {
@@ -349,58 +371,9 @@
                         type: 'image',
                         timestamp: Date.now()
                     });
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
 
-        // IMAGE HANDLER (BASE64 VERSION)
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file || !currentMemberId) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800;
-                    let width = img.width;
-                    let height = img.height;
-
-        // IMAGE HANDLER (BASE64 VERSION)
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file || !currentMemberId) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > MAX_WIDTH) {
-                        height *= MAX_WIDTH / width;
-                        width = MAX_WIDTH;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    const base64 = canvas.toDataURL('image/jpeg', 0.7);
-                    
-                    push(ref(db, `tntchat/chats/admin_${currentMemberId}/messages`), {
-                        sender: 'admin',
-                        text: base64,
-                        type: 'image',
-                        timestamp: Date.now()
-                    });
+                    // Biar bisa pilih file yang sama lagi.
+                    imageInput.value = '';
                 };
                 img.src = event.target.result;
             };
@@ -426,6 +399,7 @@
 
             try {
                 let id = originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (!id) id = `user${Date.now().toString(36)}`;
                 let finalName = originalName;
 
                 const snapshot = await get(ref(db, `tntchat/members/${id}`));
