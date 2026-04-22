@@ -68,10 +68,13 @@
             <div id="chat-box"></div>
             <div class="input-area">
                 <button id="emoji-btn">😊</button>
+                <button id="attach-btn" onclick="document.getElementById('image-input').click()">🖼️</button>
                 <input type="text" id="message-input" placeholder="Ketik pesan..." autocomplete="off">
+                <button id="voice-btn">🎤</button>
                 <button onclick="window.sendMessage()" id="send-btn">🚀</button>
-                <emoji-picker id="picker" style="display: none;"></emoji-picker>
+                <input type="file" id="image-input" style="display:none;" accept="image/*">
             </div>
+            <emoji-picker id="picker" style="display: none;"></emoji-picker>
         </main>
     </div>
 
@@ -120,7 +123,6 @@
         const path = window.location.pathname;
         const urlParams = new URLSearchParams(window.location.search);
         
-        // Try getting ID from URL first (for web links)
         const pathSegments = path.split('/');
         const cIndex = pathSegments.indexOf('c');
         if (cIndex !== -1) {
@@ -129,7 +131,6 @@
             memberId = urlParams.get('c');
         }
 
-        // If no ID in URL, check localStorage (for APK users)
         const savedId = localStorage.getItem('tnt_member_id');
 
         const chatScreen = document.getElementById('chat-screen');
@@ -137,6 +138,7 @@
         const errorScreen = document.getElementById('error-screen');
         const chatBox = document.getElementById('chat-box');
         const msgInput = document.getElementById('message-input');
+        const imageInput = document.getElementById('image-input');
         const memberNameEl = document.getElementById('member-name');
         const memberIdDisplay = document.getElementById('member-id-display');
         const notifSound = document.getElementById('notif-sound');
@@ -158,24 +160,20 @@
             const name = nameInput.value.trim();
             if (!name) return;
 
-            // Generate ID untuk dicek
             const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
             feedback.textContent = "⌛ Mengecek...";
             
             try {
                 const snapshot = await get(ref(db, `tntchat/members/${id}`));
                 if (snapshot.exists()) {
-                    // Berhasil login
                     localStorage.setItem('tnt_member_id', id);
                     location.reload();
                 } else {
-                    // Tidak ditemukan
                     feedback.textContent = "❌ Username tidak terdaftar di Admin";
                     nameInput.style.borderColor = "var(--neon-accent)";
                 }
             } catch (e) {
                 feedback.textContent = "⚠️ Gangguan koneksi";
-                console.error(e);
             }
         };
 
@@ -195,42 +193,60 @@
                 const snapshot = await get(memberRef);
                 
                 if (!snapshot.exists()) {
-                    // If ID was in localStorage but doesn't exist in DB, reset
                     localStorage.removeItem('tnt_member_id');
-                    showError(`ID "${id}" tidak valid atau sudah dihapus.`);
+                    showError(`ID "${id}" tidak valid.`);
                     return;
                 }
                 
                 const memberData = snapshot.val();
                 memberNameEl.textContent = `${memberData.name} 👋`;
                 memberIdDisplay.textContent = `@${id}`;
-                
                 update(memberRef, { lastActive: Date.now() });
                 
                 const chatId = `admin_${id}`;
                 onChildAdded(ref(db, `tntchat/chats/${chatId}/messages`), (snapshot) => {
                     const msg = snapshot.val();
-                    let displayText = msg.text;
-                    if (msg.encrypted) {
-                        try {
-                            const bytes = CryptoJS.AES.decrypt(msg.text, SECRET_KEY);
-                            displayText = bytes.toString(CryptoJS.enc.Utf8);
-                        } catch (e) { displayText = '[Terenkripsi]'; }
-                    }
-                    
-                    const div = document.createElement('div');
-                    div.className = `msg ${msg.sender === 'admin' ? 'admin' : 'anggota'}`;
-                    div.textContent = displayText;
-                    chatBox.appendChild(div);
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                    
-                    if (msg.sender === 'admin') {
-                        notifSound.currentTime = 0;
-                        notifSound.play().catch(()=>{});
-                    }
+                    displayMessage(msg);
                 });
             } catch (error) {
                 showError('Database error: ' + error.message);
+            }
+        }
+
+        function displayMessage(msg) {
+            let displayText = msg.text;
+            if (msg.encrypted && msg.type !== 'image') {
+                try {
+                    const bytes = CryptoJS.AES.decrypt(msg.text, SECRET_KEY);
+                    displayText = bytes.toString(CryptoJS.enc.Utf8);
+                } catch (e) { displayText = '[Terenkripsi]'; }
+            }
+            
+            const div = document.createElement('div');
+            div.className = `msg ${msg.sender === 'admin' ? 'admin' : 'anggota'}`;
+            
+            if (msg.type === 'image') {
+                const img = document.createElement('img');
+                img.src = displayText; // Base64 or URL
+                img.style.maxWidth = '100%';
+                img.style.borderRadius = '12px';
+                img.style.display = 'block';
+                img.style.cursor = 'pointer';
+                img.onclick = () => {
+                    const w = window.open("");
+                    w.document.write(`<img src="${displayText}" style="max-width:100%">`);
+                };
+                div.appendChild(img);
+            } else {
+                div.textContent = displayText;
+            }
+            
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            if (msg.sender === 'admin') {
+                notifSound.currentTime = 0;
+                notifSound.play().catch(()=>{});
             }
         }
 
@@ -244,6 +260,46 @@
             msgInput.value = '';
             msgInput.focus();
         };
+
+        // IMAGE HANDLER (BASE64 VERSION - NO STORAGE NEEDED)
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    // Kompres gambar pakai Canvas agar hemat database
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Convert ke Base64 dengan kualitas 0.7
+                    const base64 = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    push(ref(db, `tntchat/chats/admin_${memberId}/messages`), {
+                        sender: memberId,
+                        text: base64,
+                        type: 'image',
+                        timestamp: Date.now()
+                    });
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
 
         // UI Handlers
         emojiBtn.addEventListener('click', (e) => {
