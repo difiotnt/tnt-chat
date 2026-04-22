@@ -78,11 +78,35 @@
     <div id="login-screen">
         <div class="login-card">
             <h2>🔐 T-Studio Admin</h2>
-            <input type="password" id="password-input" placeholder="Masukkan password">
-            <button id="login-btn">Masuk</button>
+            <div style="position:relative; width:100%;">
+                <input type="password" id="password-input" placeholder="Masukkan password" style="width:100%;">
+                <span onclick="togglePass()" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:0.8rem; color:#aaa;">👁️</span>
+            </div>
+            <button id="login-btn" onclick="checkLogin()">Masuk</button>
             <p id="login-error" style="color:var(--neon-accent); margin-top:10px; font-size: 0.8rem;"></p>
         </div>
     </div>
+
+    <script>
+        const P_KEY = "18273645";
+        function togglePass() {
+            const x = document.getElementById("password-input");
+            x.type = x.type === "password" ? "text" : "password";
+        }
+        function checkLogin() {
+            const val = document.getElementById('password-input').value;
+            console.log("Attempting login with:", val);
+            if (val === P_KEY) {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'block';
+                // Trigger member load via custom event since loadMembers is in a module
+                window.dispatchEvent(new CustomEvent('admin-logged-in'));
+            } else {
+                alert("Password Salah! Pastikan: 18273645");
+                document.getElementById('login-error').textContent = 'Password salah!';
+            }
+        }
+    </script>
 
     <!-- Image Viewer Modal -->
     <div id="image-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
@@ -170,22 +194,10 @@
         const voiceBtn = document.getElementById('voice-btn');
         const picker = document.querySelector('#picker');
         const chatTitle = document.getElementById('chat-title');
-        const copyLinkBtn = document.getElementById('copy-link-btn');
-        const notifSound = document.getElementById('notif-sound');
-
         const loginBtn = document.getElementById('login-btn');
-        if (loginBtn) {
-            loginBtn.addEventListener('click', () => {
-                const pass = document.getElementById('password-input').value;
-                if (pass === ADMIN_PASSWORD) {
-                    document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('main-screen').style.display = 'block';
-                    loadMembers();
-                } else {
-                    document.getElementById('login-error').textContent = 'Password salah!';
-                }
-            });
-        }
+        window.addEventListener('admin-logged-in', () => {
+            loadMembers();
+        });
 
         window.logout = () => location.reload();
 
