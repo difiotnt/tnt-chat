@@ -194,12 +194,18 @@
         const voiceBtn = document.getElementById('voice-btn');
         const picker = document.querySelector('#picker');
         const chatTitle = document.getElementById('chat-title');
-        const loginBtn = document.getElementById('login-btn');
+        const copyLinkBtn = document.getElementById('copy-link-btn');
+        const notifSound = document.getElementById('notif-sound');
+
         window.addEventListener('admin-logged-in', () => {
             loadMembers();
         });
 
-        window.logout = () => location.reload();
+        window.logout = () => {
+            if(confirm("Keluar dari Admin?")) {
+                location.reload();
+            }
+        };
 
         emojiBtn.addEventListener('click', () => {
             picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
@@ -415,25 +421,34 @@
             const originalName = nameEl.value.trim();
             if (!originalName) return;
             
-            let id = originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            let finalName = originalName;
+            const btn = document.querySelector('button[onclick="window.createNewMember()"]');
+            if(btn) btn.disabled = true;
 
-            const snapshot = await get(ref(db, `tntchat/members/${id}`));
-            if (snapshot.exists()) {
-                const suffix = Math.floor(Math.random() * 1000);
-                id = id + suffix;
-                finalName = originalName + " " + suffix;
+            try {
+                let id = originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                let finalName = originalName;
+
+                const snapshot = await get(ref(db, `tntchat/members/${id}`));
+                if (snapshot.exists()) {
+                    const suffix = Math.floor(Math.random() * 1000);
+                    id = id + suffix;
+                    finalName = originalName + " " + suffix;
+                }
+                
+                await set(ref(db, `tntchat/members/${id}`), { 
+                    name: finalName, 
+                    createdAt: Date.now(), 
+                    lastActive: Date.now() 
+                });
+                
+                nameEl.value = '';
+                await loadMembers();
+                window.selectMember(id, finalName);
+            } catch(e) {
+                alert("Gagal tambah anggota: " + e.message);
+            } finally {
+                if(btn) btn.disabled = false;
             }
-            
-            await set(ref(db, `tntchat/members/${id}`), { 
-                name: finalName, 
-                createdAt: Date.now(), 
-                lastActive: Date.now() 
-            });
-            
-            nameEl.value = '';
-            await loadMembers();
-            window.selectMember(id, finalName);
         };
 
         window.deleteMember = async (id, name) => {
