@@ -79,9 +79,15 @@
         <div class="login-card">
             <h2>🔐 T-Studio Admin</h2>
             <input type="password" id="password-input" placeholder="Masukkan password">
-            <button onclick="window.loginAdmin()">Masuk</button>
+            <button id="login-btn">Masuk</button>
             <p id="login-error" style="color:var(--neon-accent); margin-top:10px; font-size: 0.8rem;"></p>
         </div>
+    </div>
+
+    <!-- Image Viewer Modal -->
+    <div id="image-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; flex-direction:column; align-items:center; justify-content:center;">
+        <button onclick="document.getElementById('image-modal').style.display='none'" style="position:absolute; top:20px; right:20px; background:var(--neon-accent); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-weight:800; cursor:pointer;">TUTUP (X)</button>
+        <img id="modal-img" src="" style="max-width:95%; max-height:80%; border-radius:12px; box-shadow:0 0 30px rgba(0,0,0,0.5);">
     </div>
 
     <div id="main-screen" style="display:none;">
@@ -167,15 +173,19 @@
         const copyLinkBtn = document.getElementById('copy-link-btn');
         const notifSound = document.getElementById('notif-sound');
 
-        window.loginAdmin = () => {
-            if (document.getElementById('password-input').value === ADMIN_PASSWORD) {
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('main-screen').style.display = 'block';
-                loadMembers();
-            } else {
-                document.getElementById('login-error').textContent = 'Password salah!';
-            }
-        };
+        const loginBtn = document.getElementById('login-btn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                const pass = document.getElementById('password-input').value;
+                if (pass === ADMIN_PASSWORD) {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('main-screen').style.display = 'block';
+                    loadMembers();
+                } else {
+                    document.getElementById('login-error').textContent = 'Password salah!';
+                }
+            });
+        }
 
         window.logout = () => location.reload();
 
@@ -263,8 +273,10 @@
                 img.style.display = 'block';
                 img.style.cursor = 'pointer';
                 img.onclick = () => {
-                    const w = window.open("");
-                    w.document.write(`<img src="${text}" style="max-width:100%">`);
+                    const modal = document.getElementById('image-modal');
+                    const modalImg = document.getElementById('modal-img');
+                    modalImg.src = text;
+                    modal.style.display = 'flex';
                 };
                 div.appendChild(img);
             } else {
