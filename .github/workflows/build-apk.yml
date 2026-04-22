@@ -22,6 +22,15 @@ jobs:
           npm install
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
+      - name: Prepare Web Assets
+        run: |
+          mkdir -p www
+          cp index.html admin.html www/ || true
+          cp -r css www/ || true
+          cp -r assets www/ || true
+          # List files for debugging
+          ls -R www
+
       - name: Capacitor Sync
         run: |
           npx cap add android || true

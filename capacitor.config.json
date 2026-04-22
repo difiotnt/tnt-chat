@@ -1,6 +1,5 @@
 {
   "appId": "com.tnt.chat",
   "appName": "TNT Chat",
-  "webDir": ".",
-  "bundledWebRuntime": false
+  "webDir": "www"
 }
