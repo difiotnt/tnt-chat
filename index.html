@@ -58,7 +58,10 @@
                 <h2 id="member-name">Memuat...</h2>
                 <span id="member-id-display" style="font-size:0.7rem; color:var(--text-muted); display:block;"></span>
             </div>
-            <button onclick="window.clearLocalChat()" class="secondary" style="padding: 8px 12px; font-size: 0.8rem; border-radius: 12px;">🧹 Bersihkan</button>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="window.clearLocalChat()" class="secondary" style="padding: 8px 12px; font-size: 0.8rem; border-radius: 12px;">🧹 Bersihkan</button>
+                <button onclick="window.logoutMember()" class="danger" style="padding: 8px 12px; font-size: 0.8rem; border-radius: 12px;">🚪 Keluar</button>
+            </div>
         </header>
 
         <main id="chat-panel">
@@ -250,6 +253,13 @@
         });
         msgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') window.sendMessage(); });
         window.clearLocalChat = () => { if (confirm('Bersihkan layar?')) chatBox.innerHTML = ''; };
+
+        window.logoutMember = () => {
+            if (confirm('Apakah Anda yakin ingin keluar? Anda perlu memasukkan nama lagi untuk masuk kembali.')) {
+                localStorage.removeItem('tnt_member_id');
+                location.reload();
+            }
+        };
         document.body.addEventListener('click', function initSound() {
             notifSound.play().then(() => { notifSound.pause(); notifSound.currentTime = 0; }).catch(()=>{});
             document.body.removeEventListener('click', initSound);

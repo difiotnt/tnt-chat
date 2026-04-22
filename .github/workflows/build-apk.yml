@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Dual APK (Member & Admin)
 
 on:
   push:
@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  # JOB 1: BUILD UNTUK ANGGOTA
+  build-member:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
@@ -22,14 +23,12 @@ jobs:
           npm install
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-      - name: Prepare Web Assets
+      - name: Prepare Member Assets
         run: |
           mkdir -p www
-          cp index.html admin.html www/ || true
+          cp index.html www/index.html
           cp -r css www/ || true
           cp -r assets www/ || true
-          # List files for debugging
-          ls -R www
 
       - name: Capacitor Sync
         run: |
@@ -42,14 +41,68 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Build Android APK
+      - name: Build Member APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload Member APK
         uses: actions/upload-artifact@v4
         with:
-          name: tnt-chat-debug-apk
+          name: tnt-chat-member-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  # JOB 2: BUILD UNTUK ADMIN
+  build-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: Prepare Admin Assets
+        run: |
+          mkdir -p www
+          # TRIK: Ganti admin.html jadi index.html agar dikenali aplikasi
+          cp admin.html www/index.html
+          cp -r css www/ || true
+          cp -r assets www/ || true
+
+      - name: Setup Capacitor Config for Admin
+        run: |
+          # Mengubah nama aplikasi dan ID agar tidak bentrok dengan versi member
+          sed -i 's/"appName": "TNT Chat"/"appName": "TNT Admin"/g' capacitor.config.json
+          sed -i 's/"appId": "com.tnt.chat"/"appId": "com.tnt.admin"/g' capacitor.config.json
+
+      - name: Capacitor Sync
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Build Admin APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Admin APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tnt-chat-admin-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
