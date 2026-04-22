@@ -46,12 +46,14 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
+          # Ganti nama file APK
+          mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/tnt-member.apk
 
       - name: Upload Member APK
         uses: actions/upload-artifact@v4
         with:
           name: tnt-chat-member-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/tnt-member.apk
 
   # JOB 2: BUILD UNTUK ADMIN
   build-admin:
@@ -73,14 +75,12 @@ jobs:
       - name: Prepare Admin Assets
         run: |
           mkdir -p www
-          # TRIK: Ganti admin.html jadi index.html agar dikenali aplikasi
           cp admin.html www/index.html
           cp -r css www/ || true
           cp -r assets www/ || true
 
       - name: Setup Capacitor Config for Admin
         run: |
-          # Mengubah nama aplikasi dan ID agar tidak bentrok dengan versi member
           sed -i 's/"appName": "TNT Chat"/"appName": "TNT Admin"/g' capacitor.config.json
           sed -i 's/"appId": "com.tnt.chat"/"appId": "com.tnt.admin"/g' capacitor.config.json
 
@@ -100,9 +100,11 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
+          # Ganti nama file APK
+          mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/tnt-admin.apk
 
       - name: Upload Admin APK
         uses: actions/upload-artifact@v4
         with:
           name: tnt-chat-admin-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/tnt-admin.apk
