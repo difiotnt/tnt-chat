@@ -186,7 +186,6 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const SECRET_KEY = "!qawsedrftg%^78";
-        const ADMIN_PASSWORD = "18273645";
 
         let currentMemberId = null;       
         let currentMemberName = "";
@@ -207,27 +206,14 @@
         const copyLinkBtn = document.getElementById('copy-link-btn');
         const notifSound = document.getElementById('notif-sound');
 
-        window.addEventListener('admin-logged-in', () => {
-            loadMembers();
-        });
-
-        window.__adminCleanup = () => {
-            if (unsubscribeChat) { unsubscribeChat(); unsubscribeChat = null; }
-            if (currentMessagesRef) { off(currentMessagesRef); currentMessagesRef = null; }
-            currentMemberId = null;
-            currentMemberName = "";
-            chatLoaded = false;
-        };
-
-        // Logout tanpa reload, balik ke layar login.
+        // EXPOSE TO WINDOW
         window.logout = () => {
-            if (!confirm("Keluar dari Admin?")) return;
-            window.__adminCleanup();
-            document.getElementById('main-screen').style.display = 'none';
-            document.getElementById('login-screen').style.display = 'block';
-            document.getElementById('password-input').value = '';
-            document.getElementById('login-error').textContent = '';
+            if(confirm("Keluar dari Admin?")) location.reload();
         };
+
+        window.addEventListener('admin-logged-in', () => {
+            window.loadMembers();
+        });
 
         emojiBtn.addEventListener('click', () => {
             picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
@@ -263,6 +249,7 @@
                 });
             } catch (e) { console.error("Load Error:", e); }
         }
+        window.loadMembers = loadMembers;
 
         window.selectMember = (id, name) => {
             if (unsubscribeChat) { unsubscribeChat(); unsubscribeChat = null; }
@@ -339,7 +326,6 @@
             msgInput.focus();
         };
 
-        // IMAGE HANDLER (BASE64 VERSION)
         imageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file || !currentMemberId) return;
@@ -362,17 +348,11 @@
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-                    
                     const base64 = canvas.toDataURL('image/jpeg', 0.7);
                     
                     push(ref(db, `tntchat/chats/admin_${currentMemberId}/messages`), {
-                        sender: 'admin',
-                        text: base64,
-                        type: 'image',
-                        timestamp: Date.now()
+                        sender: 'admin', text: base64, type: 'image', timestamp: Date.now()
                     });
-
-                    // Biar bisa pilih file yang sama lagi.
                     imageInput.value = '';
                 };
                 img.src = event.target.result;
@@ -392,14 +372,13 @@
         window.createNewMember = async () => {
             const nameEl = document.getElementById('new-member-name');
             const originalName = nameEl.value.trim();
-            if (!originalName) return;
+            if (!originalName) { alert("Nama tidak boleh kosong"); return; }
             
             const btn = document.querySelector('button[onclick="window.createNewMember()"]');
             if(btn) btn.disabled = true;
 
             try {
                 let id = originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (!id) id = `user${Date.now().toString(36)}`;
                 let finalName = originalName;
 
                 const snapshot = await get(ref(db, `tntchat/members/${id}`));
@@ -410,14 +389,13 @@
                 }
                 
                 await set(ref(db, `tntchat/members/${id}`), { 
-                    name: finalName, 
-                    createdAt: Date.now(), 
-                    lastActive: Date.now() 
+                    name: finalName, createdAt: Date.now(), lastActive: Date.now() 
                 });
                 
                 nameEl.value = '';
-                await loadMembers();
+                await window.loadMembers();
                 window.selectMember(id, finalName);
+                alert("Anggota berhasil ditambah!");
             } catch(e) {
                 alert("Gagal tambah anggota: " + e.message);
             } finally {
@@ -429,7 +407,7 @@
             if (!confirm(`Hapus ${name}?`)) return;
             await remove(ref(db, `tntchat/members/${id}`));
             await remove(ref(db, `tntchat/chats/admin_${id}`));
-            if (currentMemberId === id) location.reload(); else loadMembers();
+            if (currentMemberId === id) location.reload(); else window.loadMembers();
         };
 
         window.copyMemberLink = () => {
