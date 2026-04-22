@@ -276,13 +276,30 @@
 
         window.createNewMember = async () => {
             const nameEl = document.getElementById('new-member-name');
-            const name = nameEl.value.trim();
-            if (!name) return;
-            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            await set(ref(db, `tntchat/members/${id}`), { name, createdAt: Date.now(), lastActive: Date.now() });
+            const originalName = nameEl.value.trim();
+            if (!originalName) return;
+            
+            let id = originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            let finalName = originalName;
+
+            // Cek apakah ID sudah ada
+            const snapshot = await get(ref(db, `tntchat/members/${id}`));
+            if (snapshot.exists()) {
+                // Jika ada, tambahkan angka acak agar unik
+                const suffix = Math.floor(Math.random() * 1000);
+                id = id + suffix;
+                finalName = originalName + " " + suffix;
+            }
+            
+            await set(ref(db, `tntchat/members/${id}`), { 
+                name: finalName, 
+                createdAt: Date.now(), 
+                lastActive: Date.now() 
+            });
+            
             nameEl.value = '';
             await loadMembers();
-            window.selectMember(id, name);
+            window.selectMember(id, finalName);
         };
 
         window.deleteMember = async (id, name) => {

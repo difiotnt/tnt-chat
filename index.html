@@ -79,9 +79,10 @@
     <div id="join-screen" style="display:none;">
         <div class="login-card">
             <h2>🚀 TNT Chat</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.9rem;">Masukkan namamu untuk mulai chat dengan Admin</p>
-            <input type="text" id="join-name-input" placeholder="Nama kamu..." autocomplete="off" style="width: 100%; padding: 14px; background: var(--surface-dark); border: 1px solid var(--glass-border); border-radius: 12px; color: #fff; margin-bottom: 20px; outline: none;">
-            <button onclick="window.joinChat()" style="width:100%; padding: 14px; background: linear-gradient(135deg, var(--neon-primary), var(--neon-secondary)); border:none; border-radius: 12px; color:#fff; font-weight:800; cursor:pointer;">GABUNG CHAT</button>
+            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.9rem;">Masukkan Username dari Admin untuk masuk</p>
+            <input type="text" id="join-name-input" placeholder="Username..." autocomplete="off" style="width: 100%; padding: 14px; background: var(--surface-dark); border: 1px solid var(--glass-border); border-radius: 12px; color: #fff; margin-bottom: 5px; outline: none;">
+            <p id="login-feedback" style="color: var(--neon-accent); font-size: 0.75rem; margin-bottom: 15px; height: 1em;"></p>
+            <button onclick="window.loginChat()" style="width:100%; padding: 14px; background: linear-gradient(135deg, var(--neon-primary), var(--neon-secondary)); border:none; border-radius: 12px; color:#fff; font-weight:800; cursor:pointer;">MASUK CHAT</button>
         </div>
     </div>
 
@@ -151,24 +152,30 @@
             joinScreen.style.display = 'flex';
         }
 
-        window.joinChat = async () => {
+        window.loginChat = async () => {
             const nameInput = document.getElementById('join-name-input');
+            const feedback = document.getElementById('login-feedback');
             const name = nameInput.value.trim();
             if (!name) return;
 
-            // Generate clean ID from name
-            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '') + Math.floor(Math.random() * 100);
+            // Generate ID untuk dicek
+            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            feedback.textContent = "⌛ Mengecek...";
             
             try {
-                await set(ref(db, `tntchat/members/${id}`), {
-                    name,
-                    createdAt: Date.now(),
-                    lastActive: Date.now()
-                });
-                localStorage.setItem('tnt_member_id', id);
-                location.reload();
+                const snapshot = await get(ref(db, `tntchat/members/${id}`));
+                if (snapshot.exists()) {
+                    // Berhasil login
+                    localStorage.setItem('tnt_member_id', id);
+                    location.reload();
+                } else {
+                    // Tidak ditemukan
+                    feedback.textContent = "❌ Username tidak terdaftar di Admin";
+                    nameInput.style.borderColor = "var(--neon-accent)";
+                }
             } catch (e) {
-                alert("Gagal daftar: " + e.message);
+                feedback.textContent = "⚠️ Gangguan koneksi";
+                console.error(e);
             }
         };
 
