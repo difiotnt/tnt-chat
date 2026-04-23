@@ -69,7 +69,7 @@
             <div class="input-area">
                 <button id="emoji-btn">😊</button>
                 <button id="attach-btn" onclick="document.getElementById('image-input').click()">🖼️</button>
-                <input type="text" id="message-input" placeholder="Ketik pesan..." autocomplete="off">
+                <textarea id="message-input" placeholder="Ketik pesan..." rows="1"></textarea>
                 <button id="voice-btn">🎤</button>
                 <button onclick="window.sendMessage()" id="send-btn">🚀</button>
                 <input type="file" id="image-input" style="display:none;" accept="image/*">
@@ -266,8 +266,15 @@
                 sender: memberId, text: encrypted, encrypted: true, timestamp: Date.now()
             });
             msgInput.value = '';
+            msgInput.style.height = 'auto'; // Reset height
             msgInput.focus();
         };
+
+        // AUTO RESIZE TEXTAREA
+        msgInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
 
         // IMAGE HANDLER (BASE64 VERSION - NO STORAGE NEEDED)
         imageInput.addEventListener('change', (e) => {

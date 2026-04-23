@@ -149,10 +149,10 @@
                 <div id="chat-box"></div>
                 
                 <div class="input-area">
-                    <button id="emoji-btn" class="secondary" disabled>😊</button> 
-                    <button id="attach-btn" class="secondary" disabled onclick="document.getElementById('image-input').click()">🖼️</button>
-                    <input type="text" id="message-input" placeholder="Ketik pesan..." disabled>
-                    <button id="voice-btn" class="secondary" disabled>🎤</button>
+                    <button id="emoji-btn" disabled>😊</button> 
+                    <button id="attach-btn" disabled onclick="document.getElementById('image-input').click()">🖼️</button>
+                    <textarea id="message-input" placeholder="Ketik pesan..." rows="1" disabled></textarea>
+                    <button id="voice-btn" disabled>🎤</button>
                     <button id="send-btn" onclick="window.sendMessage()" disabled>🚀</button>
                     <input type="file" id="image-input" style="display:none;" accept="image/*">
                 </div>
@@ -323,8 +323,15 @@
                 sender: 'admin', text: encrypted, encrypted: true, timestamp: Date.now()
             });
             msgInput.value = '';
+            msgInput.style.height = 'auto'; // Reset height
             msgInput.focus();
         };
+
+        // AUTO RESIZE TEXTAREA
+        msgInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
 
         imageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
